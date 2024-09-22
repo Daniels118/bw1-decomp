@@ -6,6 +6,7 @@ from inflection import underscore
 from pathlib import Path
 
 from structs import Composite
+from functions import FuncPtr
 from utils import partition
 
 
@@ -43,6 +44,8 @@ C_STDLIB_HEADER_IMPORT_MAP = {
     "uint16_t": "stdint.h",
     "uint32_t": "stdint.h",
     "uint64_t": "stdint.h",
+    "char16_t": "uchar.h",
+    "D3DTLVERTEX": "d3dtypes.h"
 }
 
 
@@ -61,7 +64,7 @@ class Header:
         header_path: Path
         dependencies: set[str]
         system: bool
-    
+
     path: Path
     includes: dict[str, Include]
     structs: list[Composite]
@@ -85,7 +88,7 @@ class Header:
                 if header == self.path:
                     continue
                 if header.parts[0] == self.path.parts[0]:
-                    header = header.relative_to(self.path.parent)
+                    header = header.relative_to(self.path.parts[0])
                 i = self.includes.get(header, self.Include(header, set(), False))
                 i.dependencies.add(t)
                 self.includes[header] = i
@@ -95,7 +98,7 @@ class Header:
         for s in self.structs:
             result.update(s.get_types())
         return result
-    
+
     def get_includes(self) -> list[str]:
         return sorted(list(self.includes.values()))
 
@@ -110,6 +113,10 @@ class Header:
     def get_forward_declare_types(self) -> set[str]:
         result = set()
         defined_types_so_far = set()
+        for s in self.structs:
+            if type(s) is FuncPtr:
+                defined_types_so_far.add(s.name)
+
         for s in self.structs:
             defined_types_so_far.add(f"struct {strip_pointers_arrays_and_modifiers(s.name)}")
             struct_types = {strip_pointers_arrays_and_modifiers(r) for r in s.get_types()}

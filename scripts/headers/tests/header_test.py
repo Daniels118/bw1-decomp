@@ -70,8 +70,8 @@ class TestHeaderTypes(unittest.TestCase):
 
     def test_forward_declare_list(self):
         function_proto_map = {
-            "TestStruct1Vftable__Foo": FuncPtr("TestStruct1Vftable__Foo", "__thiscall", "char*", ["struct TestStruct1*", "int", "struct TestStruct4*"]),
-            "TestStruct1Vftable__Bar": FuncPtr("TestStruct1Vftable__Bar", "__thiscall", "void", ["struct TestStruct1*", "float"]),
+            "TestStruct1Vftable__Foo": FuncPtr("TestStruct1Vftable__Foo", "__thiscall", "char*", ["struct TestStruct1*", "int", "struct TestStruct4*"], ["this", "", ""]),
+            "TestStruct1Vftable__Bar": FuncPtr("TestStruct1Vftable__Bar", "__thiscall", "void", ["struct TestStruct1*", "float"], ["this", ""]),
         }
         structs: list[Struct] = [
             Vftable(Struct("TestStruct1Vftable", 8, [Struct.Member("Foo", "TestStruct1Vftable__Foo*", 0x0), Struct.Member("Bar", "TestStruct1Vftable__Bar*", 0x4)]), function_proto_map),
@@ -427,8 +427,8 @@ static_assert(sizeof(struct TestStruct2) == 0x20, "Data type is of wrong size");
 
     def test_structs_with_forward_declare(self):
         function_proto_map = {
-            "TestStruct1Vftable__Foo": FuncPtr("TestStruct1Vftable__Foo", "__thiscall", "char*", ["struct TestStruct1*", "int", "struct TestStruct4*"]),
-            "TestStruct1Vftable__Bar": FuncPtr("TestStruct1Vftable__Bar", "__thiscall", "void", ["struct TestStruct1*", "float"]),
+            "TestStruct1Vftable__Foo": FuncPtr("TestStruct1Vftable__Foo", "__thiscall", "char*", ["struct TestStruct1*", "int", "struct TestStruct4*"], ["this", "", ""]),
+            "TestStruct1Vftable__Bar": FuncPtr("TestStruct1Vftable__Bar", "__thiscall", "void", ["struct TestStruct1*", "float"], ["this", "", ""]),
         }
         structs: list[Struct] = [
             Vftable(Struct("TestStruct1Vftable", 8, [Struct.Member("Foo", "TestStruct1Vftable__Foo*", 0x0), Struct.Member("Bar", "TestStruct1Vftable__Bar*", 0x4)]), function_proto_map),
@@ -493,8 +493,9 @@ static_assert(sizeof(struct TestStruct2) == 0x28, "Data type is of wrong size");
 
     def test_structs_with_functions(self):
         function_proto_map = {
-            "TestStructVftable__Foo": FuncPtr("TestStructVftable__Foo", "__thiscall", "char*", ["struct TestStruct*", "int"]),
-            "TestStructVftable__Bar": FuncPtr("TestStructVftable__Bar", "__thiscall", "void", ["struct TestStruct*"]),
+            "TestStructVftable__Foo": FuncPtr("TestStructVftable__Foo", "__thiscall", "char*", ["struct TestStruct*", "int"], ["this", ""]),
+            "TestStructVftable__Bar": FuncPtr("TestStructVftable__Bar", "__thiscall", "void", ["struct TestStruct*"], ["this"]),
+            "TestChildStructVftable__Qux": FuncPtr("TestChildStructVftable__Qux", "__thiscall", "char*", ["struct TestChildStruct*", "int"], ["this", "test"]),
         }
         method_map = {
             "TestStruct": [
@@ -504,14 +505,21 @@ static_assert(sizeof(struct TestStruct2) == 0x28, "Data type is of wrong size");
                 DefinedFunctionPrototype("Baz__10TestStructFPCc", "__thiscall", "int", ["struct TestStruct*", "const char*"], "TestStruct::Baz(const char*)", ["this", "name"], 0x00404070, 0x10101040),
                 DefinedFunctionPrototype("Fuz__10TestStructFv", "__thiscall", "void*", ["struct TestStruct*"], "TestStruct::Fuz(void)", ["this"], 0x00404020, 0x10101080),
             ],
+            "TestChildStruct": [
+                DefinedFunctionPrototype("Foo__15TestChildStructFi", "__thiscall", "char*", ["struct TestChildStruct*", "int"], "TestChildStruct::Foo(int)", ["this", "test"], 0x00405060, 0x10102020),
+                DefinedFunctionPrototype("Qux__15TestChildStructFi", "__thiscall", "char*", ["struct TestChildStruct*", "int"], "TestChildStruct::Qux(int)", ["this", "test"], 0x00405070, 0x10102030),
+            ],
         }
         virtual_table_function_names = (
             "Foo",
             "Bar",
+            "Qux",
         )
         structs: list[Struct] = [
             Vftable(Struct("TestStructVftable", 8, [Struct.Member("Foo", "TestStructVftable__Foo*", 0x0), Struct.Member("Bar", "TestStructVftable__Bar*", 0x4)]), function_proto_map),
             RTTIClass(Struct("TestStruct", 4, [Struct.Member("vftable", "struct TestStructVftable*", 0x0)]), {}, virtual_table_function_names, method_map, {}),
+            Vftable(Struct("TestChildStructVftable", 12, [Struct.Member("super", "struct TestStructVftable", 0x0), Struct.Member("Qux", "TestChildStructVftable__Qux*", 0x8)]), function_proto_map),
+            RTTIClass(Struct("TestChildStruct", 4, [Struct.Member("super", "struct TestStruct", 0x0)]), {}, virtual_table_function_names, method_map, {}),
         ]
         Header(self.path, includes=[], structs=structs, local_header_import_map={}).to_code(self.cw)
 
@@ -523,6 +531,7 @@ static_assert(sizeof(struct TestStruct2) == 0x28, "Data type is of wrong size");
 #include <assert.h> /* For static_assert */
 
 // Forward Declares
+struct TestChildStruct;
 struct TestStruct;
 
 struct TestStructVftable
@@ -556,6 +565,26 @@ void __fastcall Bar__10TestStructFv(struct TestStruct* this);
 void* __fastcall Fuz__10TestStructFv(struct TestStruct* this);
 // win1.41 00404070 mac 10101040 TestStruct::Baz(const char*)
 int __fastcall Baz__10TestStructFPCc(struct TestStruct* this, const void* edx, const char* name);
+
+struct TestChildStructVftable
+{
+    struct TestStructVftable super;
+    char* (__fastcall* Qux)(struct TestChildStruct* this, const void* edx, int test);
+};
+static_assert(sizeof(struct TestChildStructVftable) == 0xc, "Data type is of wrong size");
+
+struct TestChildStruct
+{
+    struct TestStruct super;
+};
+static_assert(sizeof(struct TestChildStruct) == 0x4, "Data type is of wrong size");
+
+// Override methods
+
+// win1.41 00405060 mac 10102020 TestChildStruct::Foo(int)
+char* __fastcall Foo__15TestChildStructFi(struct TestChildStruct* this, const void* edx, int test);
+// win1.41 00405070 mac 10102030 TestChildStruct::Qux(int)
+char* __fastcall Qux__15TestChildStructFi(struct TestChildStruct* this, const void* edx, int test);
 
 #endif /* BW1_DECOMP_TEST_HEADER_INCLUDED_H */
 """)
